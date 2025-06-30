@@ -20,7 +20,7 @@ from src.flux.sampling import denoise, get_noise, get_schedule, prepare_fill_emp
 from src.flux.util import embed_watermark, load_ae, load_flow_model
 from MAE.util import misc
 import torch.nn as nn
-from cprint import ccprint
+# from cprint import ccprint
 from einops import rearrange, repeat
 import cv2
 
@@ -350,8 +350,11 @@ def get_flux_asuka_res(tmp_img, tmp_mask, height, width, num_steps, guidance, to
     none_flant_fea = torch.load("./ckpt/txt.pt").to(torch_device, dtype=weight_dtype)
 
     condition_weight = 0.5
-    clip_fea = none_clip_fea + condition_weight * (clip_fea - none_clip_fea.repeat(1, 1))
-    flant_fea = none_flant_fea + condition_weight * (flant_fea - none_flant_fea.repeat(1, 1, 1))
+    clip_fea = none_clip_fea + condition_weight * (clip_fea - none_clip_fea.repeat(clip_fea.shape[0], 1))
+    
+    # Fix the dimension mismatch by properly repeating none_flant_fea to match flant_fea dimensions
+    none_flant_fea_expanded = none_flant_fea.repeat(flant_fea.shape[0], flant_fea.shape[1] // none_flant_fea.shape[1], 1)
+    flant_fea = none_flant_fea_expanded + condition_weight * (flant_fea - none_flant_fea_expanded)
 
 
     inp['vec'] = clip_fea
@@ -413,15 +416,35 @@ def main(
         offload=offload,
     )
 
+    # Load Asuka models on GPU 1
     visual_condition_extractor, alignment_clip, alignment_flant, asuka_ae = get_models_asuka(name, torch_device)
-
-    ccprint('All models loaded successfully!', 'green')
-
-
+    
+    # Update your get_res function to use the correct devices
     def get_res(input_image):
+        # Handle ImageEditor input which returns a dict with 'background' and 'layers'
+        if isinstance(input_image, dict):
+            if 'background' in input_image:
+                image = input_image['background']
+            else:
+                image = input_image['image'] if 'image' in input_image else input_image
+            
+            # Extract mask from layers or composite
+            if 'layers' in input_image and input_image['layers']:
+                # Create mask from the drawing layers
+                mask = Image.new('L', image.size, 0)  # Black background
+                for layer in input_image['layers']:
+                    if layer is not None:
+                        layer_mask = layer.convert('L')
+                        mask = Image.composite(Image.new('L', image.size, 255), mask, layer_mask)
+            else:
+                # If no layers, create an empty mask
+                mask = Image.new('L', image.size, 0)
+        else:
+            # Fallback for simple Image input
+            image = input_image
+            mask = Image.new('L', image.size, 255)  # White mask (inpaint everything)
+        
         # resize image with validation
-        image = input_image['image']
-        mask = input_image['mask']
         image = resize(image)
         mask = resize(mask)
 
@@ -449,7 +472,7 @@ def main(
 
         # Inpainting
         t0 = time.perf_counter()
-        x = get_flux_fill_res(tmp_img, tmp_mask, prompt, height, width, num_steps, guidance, model, ae, torch_device, seed, offload)
+        x = get_flux_fill_res(tmp_img, tmp_mask, prompt, height, width, num_steps, guidance, model, ae, device, seed, False)
         t1 = time.perf_counter()
 
         print(f"Done in {t1 - t0:.1f}s")
@@ -478,15 +501,15 @@ def main(
 
     with gr.Blocks() as demo:
         with gr.Column():
-            input_image = gr.Image(source='upload', type="pil", tool="sketch", mask_opacity=0.7, brush_color='#FFFFFF')
-            run_button = gr.Button(label="Run")
+            input_image = gr.ImageEditor(type="pil", label="Upload image and draw mask")
+            run_button = gr.Button("Run", variant="primary")
 
             with gr.Row():
-                flux_res = gr.Image(label="Flux")
-                asuka_res = gr.Image(label="Asuka")
+                flux_res = gr.Image(label="Flux Result")
+                asuka_res = gr.Image(label="Asuka Result")
 
+            # Use ImageEditor which provides both image and mask
             run_button.click(fn=get_res, inputs=input_image, outputs=[flux_res, asuka_res])
-
 
         demo.launch()
 
