@@ -337,6 +337,7 @@ def load_flow_model(
     if ckpt_path is not None:
         print("Loading checkpoint")
         # load_sft doesn't support torch.device
+        print(f"Loading checkpoint from {ckpt_path}")
         sd = load_sft(ckpt_path, device=str(device))
         sd = optionally_expand_state_dict(model, sd)
         missing, unexpected = model.load_state_dict(sd, strict=False, assign=True)
