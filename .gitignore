@@ -2,3 +2,5 @@
 __pycache__/
 asuka-flux/tmp/
 dataset/
+data/
+logs/
