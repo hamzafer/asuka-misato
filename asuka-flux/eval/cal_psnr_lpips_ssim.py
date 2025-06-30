@@ -60,12 +60,19 @@ if __name__ == '__main__':
     names.sort()
 
     gts = [os.path.join(args.gt_dir, 'image', n) for n in names]
-    if int(args.gt_dir.split('/')[-1]) == 1024:
+    try:
+        if int(args.gt_dir.split('/')[-1]) == 1024:
+            resize = True
+        else:
+            resize = False
+    except ValueError:
+        # Handle non-numeric directory names
+        resize = False if args.resolution == 512 else True
+
+    if resize:
         masks = [os.path.join(args.gt_dir, 'mask', "00"+n) for n in names]
-    elif int(args.gt_dir.split('/')[-1]) == 512:
-        masks = [os.path.join(args.gt_dir, 'mask', n) for n in names]
     else:
-        assert False, "gt_dir is not available"
+        masks = [os.path.join(args.gt_dir, 'mask', n) for n in names]
 
     if os.path.exists(os.path.join(args.generated_dir,  names[0])):
         results = [os.path.join(args.generated_dir,  n) for n in names]
@@ -76,23 +83,35 @@ if __name__ == '__main__':
 
     # Create dataset and dataloader
     class ImageDataset(torch.utils.data.Dataset):
-        def __init__(self, gt_paths, result_paths, mask_paths):
+        def __init__(self, gt_paths, result_paths, mask_paths, resolution=512):  # Add resolution parameter
             self.gt_paths = gt_paths
             self.result_paths = result_paths
             self.mask_paths = mask_paths
+            self.resolution = resolution  # Store resolution as instance variable
 
         def __len__(self):
             return len(self.gt_paths)
 
         def __getitem__(self, idx):
-            # Load and preprocess GT image
-            gt = np.array(Image.open(self.gt_paths[idx]).convert('RGB'))
-            mask = np.array(Image.open(self.mask_paths[idx]).convert('L'))
-            result = np.array(Image.open(self.result_paths[idx]).convert("RGB"))
+            # Load images
+            gt = Image.open(self.gt_paths[idx]).convert('RGB')
+            mask = Image.open(self.mask_paths[idx]).convert('L')
+            result = Image.open(self.result_paths[idx]).convert("RGB")
+            
+            # Use self.resolution instead of resolution
+            target_size = (self.resolution, self.resolution)  # ✅ Fixed
+            gt = gt.resize(target_size, Image.Resampling.LANCZOS)
+            mask = mask.resize(target_size, Image.Resampling.NEAREST)
+            result = result.resize(target_size, Image.Resampling.LANCZOS)
+            
+            # Convert to numpy then tensor
+            gt = np.array(gt)
+            mask = np.array(mask)
+            result = np.array(result)
 
             return TF.to_tensor(gt), TF.to_tensor(result), TF.to_tensor(mask)
 
-    dataset = ImageDataset(gts, results, masks)
+    dataset = ImageDataset(gts, results, masks, resolution=resolution)  # Pass resolution
     dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=batch_size, pin_memory=True)
 
     psnr_list = []

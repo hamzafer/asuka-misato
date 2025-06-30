@@ -2,10 +2,13 @@ import os
 import cv2
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageOps
 from torch.utils.data import Dataset
 from diffusers.image_processor import VaeImageProcessor
 from einops import rearrange
+
+# FLAG: Set to True to invert all masks
+INVERT_MASKS = True
 
 def prepare_data(img, mask, imagenet_mean=np.array([0.485, 0.456, 0.406]), imagenet_std=np.array([0.229, 0.224, 0.225])):
     img = cv2.resize(img, (256, 256), interpolation=cv2.INTER_AREA)
@@ -43,15 +46,35 @@ class InpaintingDataset(Dataset):
         assert len(self.images) == len(self.masks)
         self._length = len(self.images)
 
-
     def __len__(self):
         return self._length
 
     def __getitem__(self, idx):
         img_path = self.images[idx]
-        img = np.array(Image.open(self.images[idx]).convert('RGB'))
-        img_path = self.images[idx]
-        mask = np.array(Image.open(self.masks[idx]).convert('L').resize((self.img_size, self.img_size), resample=Image.Resampling.NEAREST)) / 255.
+        
+        # Load and resize image to target size
+        img_pil = Image.open(self.images[idx]).convert('RGB')
+        original_size = img_pil.size
+        img_pil = img_pil.resize((self.img_size, self.img_size), Image.Resampling.LANCZOS)
+        img = np.array(img_pil)
+        
+        # Load and resize mask to target size
+        mask_image = Image.open(self.masks[idx]).convert('L')
+        mask_original_size = mask_image.size
+        mask_image = mask_image.resize((self.img_size, self.img_size), Image.Resampling.NEAREST)
+        
+        # Print resize info if size changed
+        if original_size != (self.img_size, self.img_size):
+            print(f"Resized image {os.path.basename(img_path)}: {original_size} -> {self.img_size}x{self.img_size}")
+        if mask_original_size != (self.img_size, self.img_size):
+            print(f"Resized mask {os.path.basename(self.masks[idx])}: {mask_original_size} -> {self.img_size}x{self.img_size}")
+        
+        # Invert mask if flag is set
+        if INVERT_MASKS:
+            mask_image = ImageOps.invert(mask_image)
+            print(f"Inverted mask for: {os.path.basename(self.masks[idx])}")
+        
+        mask = np.array(mask_image) / 255.
         mask = mask.astype(np.float32)
 
         mask_mae, unmasked_img_mae = prepare_data(img, mask)
