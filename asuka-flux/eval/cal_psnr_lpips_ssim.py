@@ -152,3 +152,14 @@ if __name__ == '__main__':
         np.mean(lpips_list)
     )
     print(results)
+
+    # Save individual results
+    import pandas as pd
+    individual_results = pd.DataFrame({
+        'filename': names,
+        'psnr': psnr_list,
+        'ssim': ssim_list,
+        'lpips': lpips_list
+    })
+    individual_results.to_csv(f'{args.generated_dir}_individual_metrics.csv', index=False)
+    print(f"Individual results saved to {args.generated_dir}_individual_metrics.csv")

@@ -1,0 +1,11 @@
+{
+    "output_dir": "controlnet-model",
+    "result_dir": "/cluster/home/akmarala/Models/asuka-misato/regular-results/imgs",
+    "seed": null,
+    "resolution": 512,
+    "val_batch_size": 4,
+    "mixed_precision": "bf16",
+    "full_val": true,
+    "decoder_ckpt_path": "ckpt/asuka_decoder.ckpt",
+    "condition_weight": 0.5
+}

@@ -5,3 +5,11 @@ dataset/
 data/
 logs/
 ckpt/
+*.png
+*.jpg
+*.jpeg
+*.JPEG
+*.gif
+*.bmp
+*.tiff
+*.svg
