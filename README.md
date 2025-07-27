@@ -38,7 +38,7 @@ The authors do not own the image copyrights. Please follow the original dataset'
 
 
 ## Updates
-
+ - [x] Fixed a bug in the interpolation step that was causing batch inference to fail in our decoder in some cases.
  - [x] Released the training mask used in ASUKA.
  - [x] Released the ASUKA (FLUX.1-Fill) model and inference code.
  - [x] Released the MISATO@1K dataset.

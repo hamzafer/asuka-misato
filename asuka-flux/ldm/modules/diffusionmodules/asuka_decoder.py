@@ -442,7 +442,9 @@ class Decoder(nn.Module):
         # upsampling
         for i_level in reversed(range(self.num_resolutions)):
             h_ = im_x[str(tuple(h.shape))]
-            mask_ = F.interpolate(mask, size=h.shape[-2:], mode='area')
+            mask_ = torch.cat([
+                F.interpolate(mask[i:i+1], size=h.shape[-2:], mode='area') for i in range(mask.shape[0])
+            ])
             mask_[mask_ > 0] = 1
             h = h * mask_ + h_ * (1 - mask_)
             for i_block in range(self.num_res_blocks + 1):
